@@ -1,10 +1,11 @@
 # Voice Moderator Onboarding System — Technical Specification
 
-> **Version:** 1.1
-> **Date:** February 26, 2026
+> **Version:** 1.2
+> **Date:** March 1, 2026
 > **Status:** Design Complete — Validated
 > **Framework:** [Carbon](https://github.com/buape/carbon) (Discord bot framework by Buape)
 > **Database:** SQLite (file-based, simple deployment)
+> **Documentation:** [openclaw/community](https://github.com/openclaw/community) (primary docs repo)
 
 ---
 
@@ -29,13 +30,27 @@
 
 A semi-automated voice moderator onboarding pipeline for a Discord community of 50,000+ members. The system manages the full lifecycle from application → trial → promotion (or permanent decline) with bot-driven logistics and human decision-making at key checkpoints.
 
+### Organizational Context
+
+This bot serves the **VC Moderator Team** within OpenClaw's four-team moderation structure:
+
+- **Discord Moderators** (text channels, rules enforcement)
+- **VC Moderators** (voice channels — this bot's domain)
+- **Helpers** (community support, questions)
+- **Configurators** (bot & server config management)
+
+All team leads report to Shadow (Administrator). The VC Mod Lead coordinates voice channel events and management. All moderators receive the **Community Staff** umbrella role (visible in sidebar, no inherent permissions).
+
+Entry into the VC moderation track requires emailing shadow@openclaw.ai. Shadow acts as the funnel, directing candidates to the VC Mod Lead if appropriate.
+
 ### Design Principles
 
-- **Semi-automated:** Bot handles logistics, tracking, and notifications. All voicemods vote on promotions, with final sign-off from lead moderator (Andy).
+- **Semi-automated:** Bot handles logistics, tracking, and notifications. All voicemods vote on promotions, with final sign-off from VC Mod Lead.
 - **Zero tolerance during trial:** Any missed claimed time slot results in immediate trial failure. Applicants may reapply after a 7-day cooldown period.
 - **Second chance:** Declined applicants can reapply after 7 days. This ensures fairness while maintaining accountability.
 - **Full audit trail:** Every action, decision, and data point is permanently retained.
 - **Shadow-first:** Trial mods observe and report — they take no direct moderation actions.
+- **Privacy-first for trials:** Trial moderators remain private (no public visibility) until promotion is confirmed, to avoid embarrassment if they back out.
 
 ### Expected Volume
 
@@ -49,6 +64,18 @@ A semi-automated voice moderator onboarding pipeline for a Discord community of 
 ### Framework
 
 **The bot MUST be implemented using the [Carbon framework](https://github.com/buape/carbon)** by Buape. Carbon provides a structured approach to building Discord bots with built-in support for commands, components, and interactions.
+
+### Bot Ecosystem Positioning
+
+This is a **standalone Carbon bot** within OpenClaw's broader bot ecosystem:
+
+- **Barnacle Bot** (2-in-1: Sapphire + Carbon) — multi-purpose server management
+- **Audrey** — voice channel automation
+- **Krill** — support ticket system
+- **KI** — XP and leveling system
+- **This bot** (VC Mod Onboarding) — dedicated VC moderator pipeline management
+
+This bot operates as a separate bot account and codebase, focused exclusively on the VC moderator onboarding workflow.
 
 ### High-Level Components
 
@@ -78,17 +105,24 @@ A semi-automated voice moderator onboarding pipeline for a Discord community of 
 
 | Role | Purpose | Permissions |
 |------|---------|-------------|
-| **Trial Voicemod** | Assigned during the 1-week trial period | View private guidelines channel. No voice moderation permissions. Can join voice channels as a regular user. |
-| **Voicemod** (Full) | Assigned upon successful promotion | Mute members, deafen members, move members, disconnect members in voice channels. Can vote on promotions and nominate Clawtributors. |
+| **Trial Moderator** (org-wide) | Provisional role for people exploring which team to join | Access to one social channel only. No server permissions. **Note:** This is distinct from Trial Voicemod. |
+| **Trial Voicemod** (VC-specific) | Assigned during the 1-week VC trial period, after email funnel and Stage 1 approval | View private guidelines channel. No voice moderation permissions. Can join voice channels as a regular user. |
+| **Voicemod** (Full) | Assigned upon successful promotion | Mute members, deafen members, move members, disconnect members in voice channels. Can vote on promotions and nominate Clawtributors. Also receives Community Staff umbrella role. |
+| **Community Staff** (umbrella) | Visible sidebar role for all moderators across all 4 teams | No inherent permissions (permissions granted via team-specific roles). |
 | **Clawtributor** | Community contributors with speaking access to protected voice channels | Can speak in designated protected voice channels. Can nominate other users for Clawtributor role. |
-| **Lead Voicemod (Andy)** | Designated lead moderator | All voicemod permissions + final approval authority on promotions and ability to manage the onboarding pipeline. |
+| **VC Mod Lead** | Designated lead moderator for the VC team | All voicemod permissions + final approval authority on promotions and ability to manage the onboarding pipeline. Reports to Shadow (Administrator). |
 
 ### Permission Boundaries
 
 - **Trial voicemods** have NO moderation powers. They are observers only.
 - **Full voicemods** can mute, deafen, move, and disconnect users in voice channels. No ban/kick/timeout powers. Can participate in promotion votes and nominate Clawtributors.
 - **Clawtributors** have speaking permissions in protected voice channels. No moderation powers.
-- **Lead voicemod (Andy)** provides final approval on all promotions after voicemod team votes.
+- **VC Mod Lead** provides final approval on all promotions after voicemod team votes. Coordinates voice channel events and management.
+
+### Security Requirements
+
+- **Discord 2FA:** All voicemods (trial and full) must have Discord 2FA enabled.
+- **GitHub 2FA:** Required if accessing the openclaw/community documentation repository.
 
 ---
 
@@ -97,28 +131,55 @@ A semi-automated voice moderator onboarding pipeline for a Discord community of 
 ### Stage 1: Application
 
 ```
-User submits application form
+User emails shadow@openclaw.ai expressing interest in VC moderation
         │
         ▼
-Bot stores application in database
+Shadow has initial conversation, determines if VC track is appropriate
         │
-        ▼
-Bot posts application to senior mod review channel
+        ├── NOT APPROPRIATE → Shadow directs to different team or declines
         │
-        ▼
-Bot checks auto-reject criteria:
-  - Account must be in server for ≥14 days
-  - No previous bans or warnings on record
-        │
-        ├── AUTO-REJECTED → Bot DMs applicant (can reapply after 7 days)
-        └── ELIGIBLE → Posted to senior mod review channel
+        └── APPROPRIATE → Shadow directs to VC Mod Lead
                 │
                 ▼
-        Senior mods review and approve/deny
+        VC Mod Lead or Shadow runs /onboard-start @user
                 │
-                ├── APPROVED → Stage 2
-                └── DENIED → Bot DMs applicant (can reapply after 7 days)
+                ▼
+        Bot checks if user is in Discord server
+                │
+                ├── NOT IN SERVER → Error: "User must be in the Discord server to onboard"
+                └── IN SERVER → Continue
+                        │
+                        ▼
+                Bot DMs user with application form modal
+                        │
+                        ▼
+                User completes form (timezone, availability, motivation)
+                        │
+                        ▼
+                Bot stores application in database
+                        │
+                        ▼
+                Bot checks auto-reject criteria:
+                  - Account must be in server for ≥14 days
+                  - No previous bans or warnings on record
+                  - No application already pending/in trial
+                  - Not in cooldown period (7 days after decline/failure)
+                        │
+                        ├── AUTO-REJECTED → Bot DMs applicant (can reapply after 7 days)
+                        │                   Bot notifies initiator in VC Mod channel
+                        │
+                        └── ELIGIBLE → Posted to VC Mod team channel for review
+                                │
+                                ▼
+                        VC Mod team reviews and approves/denies
+                                │
+                                ├── APPROVED → Stage 2
+                                └── DENIED → Bot DMs applicant (can reapply after 7 days)
 ```
+
+**Application Entry Point:**
+
+The **only** way to enter the VC moderator pipeline is by emailing shadow@openclaw.ai. Shadow acts as the initial funnel, has a conversation with the candidate, and directs them to the VC Mod Lead if appropriate. The VC Mod Lead (or Shadow) then initiates the bot-driven onboarding process.
 
 **Application Form Fields:**
 
@@ -128,7 +189,7 @@ Bot checks auto-reject criteria:
 | Availability | Text | ✅ | General availability (days/times they're typically free) |
 | Motivation | Text (long) | ✅ | Why they want to become a voice moderator |
 
-The form should be triggered via a Discord modal (slash command or button interaction).
+The form is delivered via Discord DM (modal) after `/onboard-start @user` is run, not via a user-facing slash command.
 
 **Auto-Reject Criteria:**
 - **Minimum server tenure:** User must have been in the OpenClaw Discord for at least 14 days
@@ -137,9 +198,9 @@ The form should be triggered via a Discord modal (slash command or button intera
 - **Cooldown period:** If previously declined or failed trial, must wait 7 days before reapplying
 
 **Review Process:**
-- Applications that pass auto-checks are posted as embeds in a private senior mod channel
-- Senior mods use approve/deny buttons on the embed
-- Any single senior mod can approve or deny
+- Applications that pass auto-checks are posted as embeds in the VC Mod team channel
+- VC Mod team members use approve/deny buttons on the embed
+- Any single VC mod can approve or deny
 - Decision is logged with the reviewer's identity and timestamp
 
 ---
@@ -207,7 +268,7 @@ Trial mod covers claimed time slots
 All claimed slots completed (bot-verified)
         │
         ▼
-Bot confirms metrics in voicemod channel
+Bot confirms metrics in VC Mod team channel
 Bot opens promotion vote
         │
         ▼
@@ -216,9 +277,10 @@ All voicemods vote (approve/deny)
         ▼
 Simple majority (>50%) reached?
         │
-        ├── YES → Vote sent to Andy (lead mod) for final sign-off
+        ├── YES → Vote sent to VC Mod Lead for final sign-off
         │         │
         │         ├── APPROVED → Bot promotes to full Voicemod
+        │         │               Bot grants Community Staff umbrella role
         │         │               Bot removes Trial Voicemod role
         │         │               Bot DMs + public announcement: congratulations
         │         │
@@ -233,22 +295,21 @@ Simple majority (>50%) reached?
 
 **Vote Mechanics:**
 - Vote only opens AFTER the bot confirms all quantitative metrics are met (hours completed, no missed slots)
-- Presented as a message with approve/deny buttons in the voicemod channel
+- Presented as a message with approve/deny buttons in the VC Mod team channel
 - Each voicemod (full role) gets one vote
 - Vote has a defined window (48 hours) — if no majority by deadline, the application is auto-declined
-- If simple majority (>50%) approves, the vote is escalated to Andy (lead mod) for final sign-off
-- Andy can approve or deny at any time (no time limit)
+- If simple majority (>50%) approves, the vote is escalated to VC Mod Lead for final sign-off
+- VC Mod Lead can approve or deny at any time (no time limit)
 - All votes are logged with voter identity and timestamp
 
 ---
 
 ## 5. Bot Commands
 
-### Applicant-Facing Commands
+### Trial Mod Commands
 
 | Command | Description |
 |---------|-------------|
-| `/apply` | Opens the voice moderator application form (Discord modal) |
 | `/slots` | Shows available time slots for the current/upcoming week |
 | `/claim <slot_id>` | Claims a specific 1-hour time slot |
 | `/unclaim <slot_id>` | Unclaims a slot (only allowed before the slot starts) |
@@ -265,17 +326,18 @@ Simple majority (>50%) reached?
 | `/voc-remove @user` | Vote to remove Clawtributor role from a user (requires 2 voicemods) |
 | `/voc-nominations` | List all pending Clawtributor nominations |
 
-### Senior Mod / Lead Commands
+### VC Mod Team / Lead Commands
 
 | Command | Description |
 |---------|-------------|
+| `/onboard-start @user` | (VC Mod Lead or Shadow only) Initiates the onboarding process for a user after email funnel |
 | `/applications` | Lists pending applications awaiting review |
 | `/review <application_id>` | Pulls up a specific application for review |
 | `/trial-status <user>` | Shows a trial mod's progress (slots claimed, completed, reports filed, channels covered) |
 | `/reports <user>` | Shows all reports filed by a specific trial mod |
 | `/onboarding-stats` | Dashboard: active trials, pending votes, recent outcomes |
-| `/voc-promote <user>` | (Andy only) Final approval for a promotion after voicemod team vote passes |
-| `/voc-deny <user>` | (Andy only) Deny a promotion after voicemod team vote passes |
+| `/voc-promote <user>` | (VC Mod Lead only) Final approval for a promotion after voicemod team vote passes |
+| `/voc-deny <user>` | (VC Mod Lead only) Deny a promotion after voicemod team vote passes |
 
 ### Admin Commands
 
@@ -331,7 +393,7 @@ The bot automatically checks:
 - [ ] No missed slots (zero tolerance during trial)
 
 If all checks pass, the bot:
-1. Posts a summary in the voicemod channel with:
+1. Posts a summary in the VC Mod team channel with:
    - Total hours completed
    - Number of reports filed
    - Links to all reports
@@ -346,8 +408,8 @@ If all checks pass, the bot:
 - Vote window: **48 hours** (configurable)
 - Threshold: **Simple majority (>50%)** of votes cast
 - If the vote window expires with no votes → **auto-decline** (applicant can reapply after 7 days)
-- If majority approves → escalated to Andy for final sign-off via `/voc-promote` or `/voc-deny` commands
-- Results are logged and announced in the voicemod channel, mod log channel, and via DM to applicant
+- If majority approves → escalated to VC Mod Lead for final sign-off via `/voc-promote` or `/voc-deny` commands
+- Results are logged and announced in the VC Mod team channel, mod log channel, and via DM to applicant
 
 ---
 
@@ -358,29 +420,41 @@ Notifications are delivered through multiple channels:
 - **Public announcements channel** for promotions and Clawtributor grants
 - **Mod log channel** for all events (audit trail)
 
+### Privacy Policy for Trials
+
+**Trial moderators remain private until promotion is confirmed.** This avoids potential embarrassment if they back out or fail the trial. Trial-related notifications go only to:
+- Private VC Mod team channel
+- DMs to the trial mod
+- Mod log channel (private)
+
+**No public visibility** of trial mods until they are promoted to full Voicemod.
+
+### DM Notifications
+
 | Event | DM Content |
 |-------|------------|
+| Onboarding initiated | "You've been invited to apply for the VC Moderator trial! Please complete the application form." (Sent via modal interaction) |
 | Application submitted | "Your application has been received. You'll be notified when it's reviewed." |
-| Application auto-rejected | "Your application could not be processed. [Reason: server tenure/previous warnings]. You may reapply after 7 days." |
+| Application auto-rejected | "Your application could not be processed. [Reason: server tenure/previous warnings/cooldown]. You may reapply after 7 days." |
 | Application approved | "Congratulations! You've been approved for a voice mod trial. [Guidelines link] [How to claim slots] [⚠️ Zero tolerance: missed slots = trial failure, 7-day cooldown]" |
 | Application denied | "Your application has been reviewed and was not approved. You may reapply after 7 days." |
 | Slot claimed | "You've claimed [slot time]. Remember: missing this slot will result in trial failure." |
 | Slot completed | "Slot [time] completed ✅ Progress: [X/6+] hours done." |
 | Slot missed | "You missed your claimed slot [time]. Your trial has ended. You may reapply after 7 days." |
 | Trial week complete | "You've completed all your claimed slots! Your promotion is now under review by the voicemod team." |
-| Vote passed, awaiting Andy | "The voicemod team has approved your promotion! Awaiting final sign-off from lead moderator." |
+| Vote passed, awaiting Lead | "The voicemod team has approved your promotion! Awaiting final sign-off from VC Mod Lead." |
 | Promoted | "🎉 Congratulations! You've been promoted to Voice Moderator. [New permissions overview]" (Also posted in public announcements channel) |
 | Declined (vote failed) | "After review, the voicemod team has decided not to proceed with your promotion. You may reapply after 7 days." |
-| Declined (Andy denied) | "After final review, your promotion was not approved. You may reapply after 7 days." |
+| Declined (Lead denied) | "After final review, your promotion was not approved. You may reapply after 7 days." |
 
-### Voicemod / Mod Log Notifications
+### VC Mod Team / Mod Log Notifications
 
-**In Voicemod Channel:**
-- New application received → ping in review channel
+**In VC Mod Team Channel:**
+- New application received (after `/onboard-start` and auto-checks) → ping for review
 - Trial mod missed a slot → alert posted
 - Trial mod completed all slots → summary posted + vote opened
 - Vote concluded → results announced
-- Awaiting Andy's final approval → notification with `/voc-promote` and `/voc-deny` instructions
+- Awaiting VC Mod Lead's final approval → notification with `/voc-promote` and `/voc-deny` instructions
 
 **In Public Announcements Channel:**
 - New voicemod promoted → celebration announcement with @mention
@@ -408,7 +482,8 @@ Application {
   availability: string
   motivation: string
   status: PENDING | APPROVED | DENIED | TRIAL_ACTIVE | TRIAL_FAILED | PROMOTED | VOTE_FAILED
-  reviewer_id: Discord snowflake (nullable)
+  initiated_by: Discord snowflake (tracks who ran /onboard-start — VC Mod Lead or Shadow)
+  reviewer_id: Discord snowflake (nullable, tracks who approved/denied the application)
   reviewed_at: timestamp (nullable)
   created_at: timestamp
   updated_at: timestamp
@@ -493,15 +568,16 @@ AuditLog {
 
 | Scenario | Behavior |
 |----------|----------|
+| User emails Shadow but isn't in Discord server | Shadow directs them to join the Discord server first. `/onboard-start` will fail with error if user is not in server. |
 | Trial mod misses a claimed slot | Immediate failure. Role removed. DM sent. Status → TRIAL_FAILED. Can reapply after 7 days. |
 | Trial mod goes offline mid-slot | If presence drops below threshold (45 min of 60), slot is marked MISSED → failure. |
 | Trial mod tries to unclaim a slot that already started | Denied. Slot is locked once start time passes. |
 | Trial mod claims fewer than 6 hours | They cannot proceed. Bot reminds them of the minimum. Trial week clock doesn't start until ≥6 hours are claimed. |
 | Voicemod votes after the vote window closes | Vote is rejected. Window is enforced. |
 | No voicemods vote within the window | Auto-decline. Applicant can reapply after 7 days. |
-| User who was previously declined tries to reapply within 7 days | Bot checks database. Application is rejected with message: "You must wait [X days] before reapplying." |
+| User who was previously declined tries to reapply within 7 days | `/onboard-start` checks database. If in cooldown, bot notifies initiator: "User must wait [X days] before reapplying." |
 | User tries to reapply after 7-day cooldown | Allowed. Previous application history is logged but does not block new application. |
-| Voicemod team approves but Andy never responds | Application stays in "awaiting final approval" state indefinitely. No timeout. |
+| Voicemod team approves but VC Mod Lead never responds | Application stays in "awaiting final approval" state indefinitely. No timeout. |
 | Trial mod is banned/leaves server during trial | Auto-fail. Application marked as TRIAL_FAILED. |
 | Bot goes offline during a slot | Presence data may be incomplete. **Recommendation:** build in a recovery mechanism that checks voice state on reconnect, but err on the side of the trial mod (don't fail them for bot downtime). |
 | Multiple trial mods claim the same slot | Allowed. Slots are not exclusive — multiple people can observe the same time window. |
@@ -517,36 +593,50 @@ AuditLog {
 
 ## 11. Guidelines Channel Content
 
-The private guidelines channel (read-only, unlocked for trial voicemods) should contain a comprehensive handbook covering:
+### Documentation Structure
 
-### Section 1: Voice Channel Rules
+**Primary documentation source:** [openclaw/community](https://github.com/openclaw/community) GitHub repository (public).
+
+**Discord guidelines channel:** Quick-reference with links to the full GitHub docs. The channel contains:
+- Links to the full documentation on GitHub
+- Quick command reference (most commonly used commands)
+- Biggest rules summary (top violations to watch for)
+- Emergency escalation contacts
+
+**Private trial onboarding materials:** Per the meeting policy, onboarding trial moderators is kept private. Trial-specific materials may be hosted in the private VC Mod team channel or DM'd to trial mods.
+
+### GitHub Documentation Sections
+
+The openclaw/community repository should contain comprehensive voice moderation documentation:
+
+#### Section 1: Voice Channel Rules
 - What behavior is acceptable/unacceptable
 - Noise, music, harassment, hate speech policies
 - Age-restricted content policies
 - Channel-specific rules (if different VCs have different norms)
 
-### Section 2: Moderation Tools & Commands
+#### Section 2: Moderation Tools & Commands
 - How to use `/report <user|message> <reason>`
 - What constitutes a reportable incident
 - Examples of good vs. poor reports
 
-### Section 3: Escalation Paths
+#### Section 3: Escalation Paths
 - When to report vs. when to act (for full mods)
-- How to escalate to senior mods
+- How to escalate to VC Mod Lead or Shadow
 - Emergency procedures (raids, doxxing, threats)
 
-### Section 4: Real Scenario Examples
+#### Section 4: Real Scenario Examples
 - Example scenarios with correct responses
 - Common mistakes new moderators make
 - "What would you do?" practice scenarios
 
-### Section 5: Trial Period Expectations
+#### Section 5: Trial Period Expectations
 - Reiteration of zero-tolerance slot policy
 - How presence is tracked
 - What the promotion vote considers
 - Timeline and next steps
 
-**Note:** OpenClaw already has existing voice moderation guidelines that will be referenced in this channel.
+**Note:** OpenClaw already has existing voice moderation guidelines that will be migrated to the GitHub repository.
 
 ---
 
@@ -697,8 +787,11 @@ See Section 9 for `ClawtributorNomination` and `ClawtributorRemoval` entities.
 | `DEFAULT_VOTE_OUTCOME` | DECLINE | What happens if no votes are cast in the window |
 | `REAPPLY_COOLDOWN_DAYS` | 7 | Days user must wait after decline/failure before reapplying |
 | `MIN_SERVER_TENURE_DAYS` | 14 | Minimum days in server before user can apply |
-| `ANDY_USER_ID` | (configured) | Discord user ID of lead mod with final promotion authority |
+| `VC_MOD_LEAD_USER_ID` | (configured) | Discord user ID of VC Mod Lead with final promotion authority |
+| `VC_MOD_CHANNEL_ID` | (configured) | Channel ID for VC Mod team channel (review, votes, notifications) |
 | `PROTECTED_VOICE_CHANNELS` | (configured) | Array of voice channel IDs where Clawtributor role grants speak permissions |
 | `NOMINATION_CHANNEL_ID` | (configured) | Channel where Clawtributor nominations are posted |
 | `PUBLIC_ANNOUNCEMENT_CHANNEL_ID` | (configured) | Channel for promotion/Clawtributor announcements |
 | `MOD_LOG_CHANNEL_ID` | (configured) | Channel for audit trail logging |
+| `DOCS_REPO_URL` | https://github.com/openclaw/community | URL to the primary documentation repository |
+| `COMMUNITY_STAFF_ROLE_ID` | (configured) | Role ID for Community Staff umbrella role (granted on promotion) |
